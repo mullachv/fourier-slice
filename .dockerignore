@@ -1,0 +1,17 @@
+# Local venv is platform-specific; uv will create it in the image
+.venv
+venv
+.env
+# Ignore dev and cache
+.pytest_cache
+.coverage
+htmlcov
+.git
+.gitignore
+*.md
+!README.md
+# Tests not needed in runtime image
+tests
+Dockerfile
+.dockerignore
+Makefile

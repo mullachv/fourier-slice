@@ -1,0 +1,50 @@
+[project]
+name = "fourier-slice"
+version = "0.1.0"
+description = "Fourier Slice Theorem (Central Slice) interactive Streamlit visualizer"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "streamlit>=1.28",
+    "plotly>=5.18",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+]
+# macOS-only: better file watching for Streamlit/dev (optional)
+dev-darwin = [
+    "watchdog; sys_platform == 'darwin'",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# Flat layout: no package dir; ship top-level modules
+only-include = ["core.py", "app.py"]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    # Install only on macOS (PEP 508 marker)
+    "watchdog; sys_platform == 'darwin'",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["."]
+omit = ["tests/*", "venv/*", ".venv/*"]
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "if __name__ == .__main__.:"]

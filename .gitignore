@@ -1,0 +1,19 @@
+# Virtual env and caches
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.coverage
+htmlcov/
+*.pyc
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# uv / build
+.eggs/
+*.egg-info/
+dist/
+build/

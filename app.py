@@ -40,6 +40,11 @@ with st.sidebar:
 
     surface_step = st.slider("Fourier surface sparsity (bigger = lighter)", 1, 8, 3, step=1)
     slice_point_step = st.slider("Slice point sparsity (bigger = fewer points)", 1, 12, 3, step=1)
+    st.markdown(
+        "**Angle convention:** `θ` is measured counterclockwise from +x and is the projection normal / Fourier-slice direction, "
+        r"i.e. $(k_x,k_y)=(\omega\cos\theta,\omega\sin\theta)$. "
+        "The parallel integration lines in space are perpendicular to this direction."
+    )
     st.subheader("Plot 1: projection lines")
     show_theta1_lines = st.radio("Emphasize lines", ["θ₁", "θ₂"], horizontal=True, index=0) == "θ₁"
 
@@ -83,6 +88,11 @@ colA, colB = st.columns([1, 1])
 # ---- Plot 1: f(x,y) as 3D surface + projection lines for θ₁ and θ₂ (one set emphasized)
 with colA:
     st.subheader("1) Spatial domain: f(x,y) as a 3D surface + projection lines (θ₁ & θ₂)")
+    st.caption(
+        "Convention used here: θ is measured counterclockwise from +x and is the normal to projection lines "
+        "(and the Fourier-slice angle). "
+        "The drawn line family corresponds to constant-t lines, perpendicular to (cosθ, sinθ)."
+    )
 
     t_indices = np.linspace(int(0.2*N), int(0.8*N), 5).astype(int)
     base_z = float(np.min(f) - 0.35*(np.max(f)-np.min(f)))
@@ -95,14 +105,15 @@ with colA:
     x_ext = np.linspace(-1 - margin_data, 1 + margin_data, len(pc_grid_ext))
     y_ext = np.linspace(-1 - margin_data, 1 + margin_data, len(pc_grid_ext))
 
-    def lines_at_angle(theta_deg, p, label, emphasized, legend_name, legend_group):
+    def lines_at_angle(theta_deg, p, label, emphasized, legend_name, legend_group, color, initially_visible):
         th = np.deg2rad(theta_deg)
         c, s = np.cos(th), np.sin(th)
-        line_style = dict(width=6) if emphasized else dict(width=4, color="rgba(150,150,150,0.35)")
+        line_style = dict(width=7 if emphasized else 5, color=color)
         for i, t_idx in enumerate(t_indices):
             xp_pc = (t_idx - (N-1)/2)
-            xpc = c * (xp_pc * np.ones_like(ys_pc)) + s * ys_pc
-            ypc = -s * (xp_pc * np.ones_like(ys_pc)) + c * ys_pc
+            # constant-t lines for x cos(theta) + y sin(theta) = t
+            xpc = c * (xp_pc * np.ones_like(ys_pc)) - s * ys_pc
+            ypc = s * (xp_pc * np.ones_like(ys_pc)) + c * ys_pc
             # Use extended bounds so lines run past the surface and stay clickable
             mask = (xpc >= pc_grid[0] - margin_pc) & (xpc <= pc_grid[-1] + margin_pc) & (ypc >= pc_grid[0] - margin_pc) & (ypc <= pc_grid[-1] + margin_pc)
             x_draw = np.interp(xpc[mask], pc_grid_ext, x_ext)
@@ -118,25 +129,87 @@ with colA:
                 name=legend_name,
                 legendgroup=legend_group,
                 showlegend=(i == 0),
+                visible=True if initially_visible else "legendonly",
             ))
+
+    def add_theta_normal_guide(theta_deg, label, color, legend_group, initially_visible):
+        th = np.deg2rad(theta_deg)
+        c, s = np.cos(th), np.sin(th)
+        # Long bidirectional guide for the normal direction (cos(theta), sin(theta)).
+        # Keep at projection-line plane (tiny offset prevents z-fighting).
+        z_guide = base_z + 0.01 * (np.max(f) - np.min(f))
+        L = 1.0 + margin_data
+        lambdas = np.linspace(-L, L, 19)
+        xg = lambdas * c
+        yg = lambdas * s
+        fig1.add_trace(go.Scatter3d(
+            x=xg,
+            y=yg,
+            z=np.full_like(xg, z_guide),
+            mode="lines",
+            line=dict(color=color, width=6, dash="longdash"),
+            hoverinfo="skip",
+            name=label,
+            showlegend=True,
+            legendgroup=legend_group,
+            visible=True if initially_visible else "legendonly",
+        ))
 
     fig1 = go.Figure()
     fig1.add_trace(go.Surface(
         x=X, y=Y, z=f,
-        opacity=0.85,
+        opacity=0.25,
         showscale=False,
+        colorscale=[[0.0, "#f4f1ea"], [1.0, "#c8c2b0"]],
+        lighting=dict(ambient=0.75, diffuse=0.5, specular=0.08, roughness=0.95, fresnel=0.05),
+        lightposition=dict(x=120, y=-160, z=220),
         name="f(x,y)",
         hovertemplate="f(x,y)<br>x: %{x:.4f}<br>y: %{y:.4f}<br>z: %{z:.4f}<extra></extra>"
     ))
 
-    lines_at_angle(theta1, p1, f"θ₁={theta1:.0f}°", emphasized=show_theta1_lines, legend_name="θ₁ lines", legend_group="theta1")
-    lines_at_angle(theta2, p2, f"θ₂={theta2:.0f}°", emphasized=not show_theta1_lines, legend_name="θ₂ lines", legend_group="theta2")
+    lines_at_angle(
+        theta1,
+        p1,
+        f"θ₁={theta1:.0f}°",
+        emphasized=show_theta1_lines,
+        legend_name="θ₁ lines",
+        legend_group="theta1",
+        color="#1f77b4",
+        initially_visible=show_theta1_lines,
+    )
+    add_theta_normal_guide(
+        theta1,
+        f"θ₁ normal direction ({theta1:.0f}°)",
+        color="#1f77b4",
+        legend_group="theta1",
+        initially_visible=show_theta1_lines,
+    )
+    lines_at_angle(
+        theta2,
+        p2,
+        f"θ₂={theta2:.0f}°",
+        emphasized=not show_theta1_lines,
+        legend_name="θ₂ lines",
+        legend_group="theta2",
+        color="#d62728",
+        initially_visible=not show_theta1_lines,
+    )
+    add_theta_normal_guide(
+        theta2,
+        f"θ₂ normal direction ({theta2:.0f}°)",
+        color="#d62728",
+        legend_group="theta2",
+        initially_visible=not show_theta1_lines,
+    )
 
     fig1.update_layout(
         height=520,
         scene=dict(
             xaxis_title="x", yaxis_title="y", zaxis_title="z",
-            camera=dict(eye=dict(x=1.6, y=1.3, z=0.9))
+            camera=dict(
+                eye=dict(x=0.05, y=-2.2, z=1.0),
+                up=dict(x=0, y=0, z=1),
+            ),
         ),
         margin=dict(l=0, r=0, t=0, b=0),
         showlegend=True,
@@ -190,33 +263,47 @@ with colD:
     KY_ds = KY[::step, ::step]
 
     fig4 = go.Figure()
-    fig4.add_trace(go.Surface(x=KX_ds, y=KY_ds, z=F_ds, opacity=0.55, showscale=False))
+    fig4.add_trace(go.Surface(
+        x=KX_ds,
+        y=KY_ds,
+        z=F_ds,
+        opacity=0.25,
+        showscale=False,
+        colorscale=[[0.0, "#f4f1ea"], [1.0, "#c8c2b0"]],
+        lighting=dict(ambient=0.75, diffuse=0.5, specular=0.08, roughness=0.95, fresnel=0.05),
+        lightposition=dict(x=120, y=-160, z=220),
+        name="log(1+|F|) surface",
+    ))
 
     # Slice lines + sparse points (same rhs arrays)
-    def add_slice(fig, kx, ky, rhs, valid, name):
+    def add_slice(fig, kx, ky, rhs, valid, name, color):
         fig.add_trace(go.Scatter3d(
             x=kx[valid], y=ky[valid], z=rhs[valid],
-            mode="lines", line=dict(width=7),
+            mode="lines", line=dict(width=7, color=color),
             name=name
         ))
         keep = np.where(valid)[0][::int(slice_point_step)]
         fig.add_trace(go.Scatter3d(
             x=kx[keep], y=ky[keep], z=rhs[keep],
-            mode="markers", marker=dict(size=3),
+            mode="markers", marker=dict(size=3, color=color),
             name=f"{name} (pts)"
         ))
 
-    add_slice(fig4, kx1, ky1, rhs1, valid1, f"slice θ₁={theta1:.1f}°")
-    add_slice(fig4, kx2, ky2, rhs2, valid2, f"slice θ₂={theta2:.1f}°")
+    add_slice(fig4, kx1, ky1, rhs1, valid1, f"slice θ₁={theta1:.1f}°", "#1f77b4")
+    add_slice(fig4, kx2, ky2, rhs2, valid2, f"slice θ₂={theta2:.1f}°", "#d62728")
 
     fig4.update_layout(
         height=420,
         scene=dict(
             xaxis_title="kx", yaxis_title="ky", zaxis_title="log(1+|F|)",
-            camera=dict(eye=dict(x=1.6, y=1.3, z=0.9))
+            camera=dict(
+                eye=dict(x=0.05, y=-2.2, z=1.0),
+                up=dict(x=0, y=0, z=1),
+            ),
         ),
         margin=dict(l=0, r=0, t=0, b=0),
-        showlegend=False
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
     )
     st.plotly_chart(fig4, width="stretch")
 
@@ -245,7 +332,7 @@ st.plotly_chart(fig5, width="stretch")
 st.divider()
 st.subheader("Test signal f(x,y)")
 st.latex(
-    r"f(x,y) = \sum_{k=1}^{3} A_k \exp\left(-\frac{(x-\mu_{x,k})^2}{2\sigma_{x,k}^2} - \frac{(y-\mu_{y,k})^2}{2\sigma_{y,k}^2}\right) + B\cos(2\pi(7x+1.7y)) + \varepsilon"
+    r"f(x,y) = \sum_{k=1}^{3} A_k \exp\left(-\frac{(x-\mu_{x,k})^2}{2\sigma_{x,k}^2} - \frac{(y-\mu_{y,k})^2}{2\sigma_{y,k}^2}\right) + B\cos(2\pi(2.2x+0.6y)) + \varepsilon"
 )
 st.caption(
     "**Description:** Anisotropic mixture of three bivariate Gaussians (different centers and axis-aligned covariances), plus an oriented sinusoid to inject directional spectral structure, plus small additive Gaussian noise. "

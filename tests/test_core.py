@@ -132,3 +132,67 @@ class TestSliceFromF:
         # θ=0 => ky should be 0
         np.testing.assert_allclose(ky, 0.0, atol=1e-14)
         np.testing.assert_allclose(kx, freq, atol=1e-14)
+
+    def test_slice_endpoint_mask_and_fill(self, small_image):
+        f = small_image[0]
+        F = fft2_centered(f)
+        F_log = np.log1p(np.abs(F))
+        freq = np.fft.fftshift(np.fft.fftfreq(32, d=1.0))
+        _, _, rhs, valid = slice_from_F(F_log, 0.0, freq)
+        # Bilinear interpolation excludes the right endpoint at θ=0.
+        assert not valid[-1]
+        # Invalid points should remain zero-filled.
+        assert np.all(rhs[~valid] == 0.0)
+
+
+@pytest.mark.skipif(not SCIPY_OK, reason="SciPy required for projection_via_rotation")
+class TestFourierSliceConsistency:
+    def test_lhs_rhs_match_across_multiple_angles(self):
+        f, *_ = make_test_image(N=96, seed=7)
+        f = f - f.mean()
+        F = fft2_centered(f)
+        F_log = np.log1p(np.abs(F))
+        freq = np.fft.fftshift(np.fft.fftfreq(96, d=1.0))
+        angles = [0.0, 20.0, 35.0, 55.0, 80.0, 110.0, 145.0]
+
+        for th in angles:
+            p = projection_via_rotation(f, th)
+            lhs = np.log1p(np.abs(fft1_centered(p)))
+            _, _, rhs, valid = slice_from_F(F_log, th, freq)
+            a = lhs[valid]
+            b = rhs[valid]
+            a = (a - a.mean()) / (a.std() + 1e-12)
+            b = (b - b.mean()) / (b.std() + 1e-12)
+            corr = float(np.corrcoef(a, b)[0, 1])
+            assert corr > 0.8, f"low LHS/RHS correlation at theta={th}: {corr:.3f}"
+
+    def test_projection_theta_plus_180_is_reversed(self):
+        f, *_ = make_test_image(N=64, seed=5)
+        f = f - f.mean()
+        p = projection_via_rotation(f, 35.0)
+        p180 = projection_via_rotation(f, 215.0)
+        np.testing.assert_allclose(p, p180[::-1], atol=1e-6)
+
+    def test_find_most_different_theta_is_deterministic(self):
+        f, *_ = make_test_image(N=64, seed=9)
+        f = f - f.mean()
+        angles = np.arange(0.0, 180.0, 5.0)
+        out1 = find_most_different_theta(f, 35.0, angles)
+        out2 = find_most_different_theta(f, 35.0, angles)
+        assert out1 == out2
+
+
+class TestAngleConventionGeometry:
+    def test_constant_t_line_is_orthogonal_to_theta_direction(self):
+        # Spatial-domain lines in Plot 1 implement:
+        #   x = cos(theta)*t - sin(theta)*s
+        #   y = sin(theta)*t + cos(theta)*s
+        # so x*cos(theta) + y*sin(theta) = t for all s.
+        theta = np.deg2rad(35.0)
+        c, s = np.cos(theta), np.sin(theta)
+        t_value = 0.37
+        sweep = np.linspace(-2.0, 2.0, 41)
+        x = c * t_value - s * sweep
+        y = s * t_value + c * sweep
+        recovered_t = x * c + y * s
+        np.testing.assert_allclose(recovered_t, t_value, atol=1e-12)

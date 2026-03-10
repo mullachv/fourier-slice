@@ -19,7 +19,8 @@ def make_test_image(N=160, seed=1):
         + 0.95 * np.exp(-((X + 0.32) ** 2 / (2 * 0.24**2) + (Y - 0.27) ** 2 / (2 * 0.08**2)))
         + 0.55 * np.exp(-((X + 0.02) ** 2 / (2 * 0.06**2) + (Y + 0.38) ** 2 / (2 * 0.06**2)))
     )
-    f += 0.20 * np.cos(2 * np.pi * (7.0 * X + 1.7 * Y))
+    # Lower-frequency oriented sinusoid for smoother texture while preserving directionality.
+    f += 0.20 * np.cos(2 * np.pi * (2.2 * X + 0.6 * Y))
     f += 0.03 * rng.normal(size=f.shape)
     return f, x, y, X, Y
 
